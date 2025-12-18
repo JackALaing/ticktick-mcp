@@ -1,28 +1,86 @@
 """
-TickTick MCP Server - Enterprise-grade MCP server with unified V1/V2 API support.
+ticktick-mcp - A comprehensive Python library for TickTick with MCP server support.
 
-This package provides a comprehensive Model Context Protocol (MCP) server
-for TickTick, combining both the official V1 API and the unofficial V2 API
-to provide maximum functionality.
+This package provides:
+1. A full-featured async Python client for the TickTick API
+2. An MCP (Model Context Protocol) server for AI assistant integration
+
+The library combines both the official V1 (OAuth2) API and the unofficial V2
+(Session) API to provide maximum functionality including tags, folders, focus
+tracking, and more features not available in the official API alone.
+
+Quick Start (Python Library):
+    ```python
+    from ticktick_mcp import TickTickClient
+
+    async with TickTickClient.from_settings() as client:
+        # Get all tasks
+        tasks = await client.get_all_tasks()
+
+        # Create a task
+        task = await client.create_task(
+            title="Buy groceries",
+            due_date="2025-01-20T17:00:00",
+            tags=["shopping"],
+        )
+
+        # Complete a task
+        await client.complete_task(task.id, task.project_id)
+    ```
+
+Quick Start (MCP Server):
+    ```bash
+    # Run the MCP server
+    ticktick-mcp
+    ```
 
 Architecture:
-    MCP Tools Layer
-         │
-         ▼
-    TickTick Client (version-agnostic)
-         │
-         ▼
-    Unified API Layer (routing & normalization)
-         │
-    ┌────┴────┐
-    ▼         ▼
-  V1 API    V2 API
-  Module    Module
+    ┌─────────────────────────────────────┐
+    │  Your Application / MCP Server      │
+    └─────────────────┬───────────────────┘
+                      │
+    ┌─────────────────▼───────────────────┐
+    │       TickTickClient                │
+    │   (High-level, user-friendly API)   │
+    └─────────────────┬───────────────────┘
+                      │
+    ┌─────────────────▼───────────────────┐
+    │        UnifiedTickTickAPI           │
+    │    (Version routing & conversion)   │
+    └─────────────────┬───────────────────┘
+                      │
+           ┌──────────┴──────────┐
+           ▼                     ▼
+    ┌──────────────┐     ┌──────────────┐
+    │   V1 API     │     │   V2 API     │
+    │  (OAuth2)    │     │  (Session)   │
+    └──────────────┘     └──────────────┘
+
+See the README for full documentation.
 """
 
 __version__ = "0.1.0"
 __author__ = "TickTick MCP Contributors"
 
+# Main client - primary entry point for library usage
+from ticktick_mcp.client import TickTickClient
+
+# Models - data structures for tasks, projects, tags, etc.
+from ticktick_mcp.models import (
+    Task,
+    ChecklistItem,
+    TaskReminder,
+    Project,
+    ProjectGroup,
+    ProjectData,
+    Column,
+    Tag,
+    User,
+    UserStatus,
+    UserStatistics,
+)
+
+# Exceptions - for error handling
 from ticktick_mcp.exceptions import (
     TickTickError,
     TickTickAuthenticationError,
@@ -30,14 +88,58 @@ from ticktick_mcp.exceptions import (
     TickTickValidationError,
     TickTickRateLimitError,
     TickTickNotFoundError,
+    TickTickConfigurationError,
+    TickTickForbiddenError,
+    TickTickServerError,
 )
 
+# Constants - enums and configuration values
+from ticktick_mcp.constants import (
+    TaskStatus,
+    TaskPriority,
+    TaskKind,
+    ProjectKind,
+    ViewMode,
+)
+
+# Settings - configuration management
+from ticktick_mcp.settings import TickTickSettings, get_settings, configure_settings
+
 __all__ = [
+    # Version
     "__version__",
+    # Client
+    "TickTickClient",
+    # Models
+    "Task",
+    "ChecklistItem",
+    "TaskReminder",
+    "Project",
+    "ProjectGroup",
+    "ProjectData",
+    "Column",
+    "Tag",
+    "User",
+    "UserStatus",
+    "UserStatistics",
+    # Exceptions
     "TickTickError",
     "TickTickAuthenticationError",
     "TickTickAPIError",
     "TickTickValidationError",
     "TickTickRateLimitError",
     "TickTickNotFoundError",
+    "TickTickConfigurationError",
+    "TickTickForbiddenError",
+    "TickTickServerError",
+    # Constants
+    "TaskStatus",
+    "TaskPriority",
+    "TaskKind",
+    "ProjectKind",
+    "ViewMode",
+    # Settings
+    "TickTickSettings",
+    "get_settings",
+    "configure_settings",
 ]
