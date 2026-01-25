@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Callable
 
 from ticktick_sdk.models import Column, Task, Project, ProjectGroup, Tag, User, UserStatus, UserStatistics
-from ticktick_sdk.tools.inputs import ResponseFormat
+from ticktick_sdk.tools.inputs import ResponseFormat, ResponseDetail
 
 # Maximum response size in characters
 CHARACTER_LIMIT = 25000
@@ -55,13 +55,20 @@ def status_label(status: int) -> str:
 # =============================================================================
 
 
-def format_task_markdown(task: Task) -> str:
-    """Format a single task as Markdown."""
+def format_task_markdown(
+    task: Task,
+    detail: ResponseDetail = ResponseDetail.STANDARD,
+) -> str:
+    """Format a single task as Markdown with configurable detail level."""
     lines = []
-
-    # Title with priority indicator
-    priority_indicator = priority_emoji(task.priority)
     title = task.title or "(No title)"
+
+    if detail == ResponseDetail.MINIMAL:
+        # Minimal: just title and ID on one line
+        return f"**{title}** (`{task.id}`)"
+
+    # Title with priority indicator (for STANDARD and FULL)
+    priority_indicator = priority_emoji(task.priority)
     lines.append(f"## {priority_indicator} {title}")
     lines.append("")
 
@@ -77,84 +84,134 @@ def format_task_markdown(task: Task) -> str:
 
     if task.due_date:
         lines.append(f"- **Due**: {format_datetime(task.due_date)}")
-    if task.start_date:
-        lines.append(f"- **Start**: {format_datetime(task.start_date)}")
 
-    if task.tags:
-        tags_str = ", ".join(f"`{t}`" for t in task.tags)
-        lines.append(f"- **Tags**: {tags_str}")
+    if detail == ResponseDetail.FULL:
+        # FULL adds more fields
+        if task.start_date:
+            lines.append(f"- **Start**: {format_datetime(task.start_date)}")
 
-    if task.content:
-        lines.append("")
-        lines.append("### Notes")
-        lines.append(task.content)
+        if task.tags:
+            tags_str = ", ".join(f"`{t}`" for t in task.tags)
+            lines.append(f"- **Tags**: {tags_str}")
 
-    if task.items:
-        lines.append("")
-        lines.append("### Subtasks")
-        for item in task.items:
-            checkbox = "[x]" if item.is_completed else "[ ]"
-            lines.append(f"- {checkbox} {item.title or '(No title)'}")
+        if task.content:
+            lines.append("")
+            lines.append("### Notes")
+            lines.append(task.content)
+
+        if task.items:
+            lines.append("")
+            lines.append("### Subtasks")
+            for item in task.items:
+                checkbox = "[x]" if item.is_completed else "[ ]"
+                lines.append(f"- {checkbox} {item.title or '(No title)'}")
+    else:
+        # STANDARD: include tags inline if present
+        if task.tags:
+            tags_str = ", ".join(f"`{t}`" for t in task.tags)
+            lines.append(f"- **Tags**: {tags_str}")
 
     return "\n".join(lines)
 
 
-def format_task_json(task: Task) -> dict[str, Any]:
-    """Format a single task as JSON-serializable dict."""
-    return {
-        "id": task.id,
-        "project_id": task.project_id,
-        "title": task.title,
-        "content": task.content,
-        "kind": task.kind,
-        "status": task.status,
-        "status_label": status_label(task.status),
-        "priority": task.priority,
-        "priority_label": priority_label(task.priority),
-        "start_date": task.start_date.isoformat() if task.start_date else None,
-        "due_date": task.due_date.isoformat() if task.due_date else None,
-        "completed_time": task.completed_time.isoformat() if task.completed_time else None,
-        "tags": task.tags,
-        "is_all_day": task.is_all_day,
-        "time_zone": task.time_zone,
-        "repeat_flag": task.repeat_flag,
-        "parent_id": task.parent_id,
-        "child_ids": task.child_ids,
-        "items": [
-            {
-                "id": item.id,
-                "title": item.title,
-                "status": item.status,
-                "completed": item.is_completed,
-            }
-            for item in task.items
-        ],
-    }
+def format_task_json(
+    task: Task,
+    detail: ResponseDetail = ResponseDetail.STANDARD,
+) -> dict[str, Any]:
+    """Format a single task as JSON-serializable dict with configurable detail level."""
+    if detail == ResponseDetail.MINIMAL:
+        return {
+            "id": task.id,
+            "title": task.title,
+            "project_id": task.project_id,
+            "status": task.status,
+        }
+    elif detail == ResponseDetail.STANDARD:
+        result = {
+            "id": task.id,
+            "project_id": task.project_id,
+            "title": task.title,
+            "status": task.status,
+            "priority": task.priority,
+        }
+        if task.due_date:
+            result["due_date"] = task.due_date.isoformat()
+        if task.tags:
+            result["tags"] = task.tags
+        if task.kind and task.kind != "TEXT":
+            result["kind"] = task.kind
+        return result
+    else:  # FULL
+        return {
+            "id": task.id,
+            "project_id": task.project_id,
+            "title": task.title,
+            "content": task.content,
+            "kind": task.kind,
+            "status": task.status,
+            "status_label": status_label(task.status),
+            "priority": task.priority,
+            "priority_label": priority_label(task.priority),
+            "start_date": task.start_date.isoformat() if task.start_date else None,
+            "due_date": task.due_date.isoformat() if task.due_date else None,
+            "completed_time": task.completed_time.isoformat() if task.completed_time else None,
+            "tags": task.tags,
+            "is_all_day": task.is_all_day,
+            "time_zone": task.time_zone,
+            "repeat_flag": task.repeat_flag,
+            "parent_id": task.parent_id,
+            "child_ids": task.child_ids,
+            "items": [
+                {
+                    "id": item.id,
+                    "title": item.title,
+                    "status": item.status,
+                    "completed": item.is_completed,
+                }
+                for item in task.items
+            ],
+        }
 
 
-def format_tasks_markdown(tasks: list[Task], title: str = "Tasks") -> str:
-    """Format multiple tasks as Markdown."""
+def format_tasks_markdown(
+    tasks: list[Task],
+    title: str = "Tasks",
+    detail: ResponseDetail = ResponseDetail.STANDARD,
+) -> str:
+    """Format multiple tasks as Markdown with configurable detail level."""
     if not tasks:
         return f"# {title}\n\nNo tasks found."
 
     lines = [f"# {title}", "", f"Found {len(tasks)} task(s):", ""]
 
     for task in tasks:
-        priority_indicator = priority_emoji(task.priority)
         task_title = task.title or "(No title)"
-        due_str = f" | Due: {format_date(task.due_date)}" if task.due_date else ""
-        tags_str = f" | Tags: {', '.join(task.tags)}" if task.tags else ""
 
-        lines.append(f"- {priority_indicator} **{task_title}** (`{task.id}`){due_str}{tags_str}")
+        if detail == ResponseDetail.MINIMAL:
+            # Minimal: just title and ID
+            lines.append(f"- **{task_title}** (`{task.id}`)")
+        elif detail == ResponseDetail.STANDARD:
+            # Standard: title, ID, due date, tags
+            priority_indicator = priority_emoji(task.priority)
+            due_str = f" | Due: {format_date(task.due_date)}" if task.due_date else ""
+            tags_str = f" | Tags: {', '.join(task.tags)}" if task.tags else ""
+            lines.append(f"- {priority_indicator} **{task_title}** (`{task.id}`){due_str}{tags_str}")
+        else:  # FULL
+            # Full: show as detailed block
+            lines.append("")
+            lines.append(format_task_markdown(task, detail=ResponseDetail.FULL))
 
     return "\n".join(lines)
 
 
-def format_tasks_json(tasks: list[Task]) -> dict[str, Any]:
-    """Format multiple tasks as JSON."""
+def format_tasks_json(
+    tasks: list[Task],
+    detail: ResponseDetail = ResponseDetail.STANDARD,
+) -> dict[str, Any]:
+    """Format multiple tasks as JSON with configurable detail level."""
     return {
         "count": len(tasks),
-        "tasks": [format_task_json(t) for t in tasks],
+        "tasks": [format_task_json(t, detail=detail) for t in tasks],
     }
 
 
@@ -183,39 +240,62 @@ def format_project_markdown(project: Project) -> str:
     return "\n".join(lines)
 
 
-def format_project_json(project: Project) -> dict[str, Any]:
-    """Format a single project as JSON."""
-    return {
-        "id": project.id,
-        "name": project.name,
-        "color": project.color,
-        "kind": project.kind,
-        "view_mode": project.view_mode,
-        "group_id": project.group_id,
-        "closed": project.closed,
-        "sort_order": project.sort_order,
-    }
+def format_project_json(
+    project: Project,
+    detail: ResponseDetail = ResponseDetail.STANDARD,
+) -> dict[str, Any]:
+    """Format a single project as JSON with configurable detail level."""
+    if detail == ResponseDetail.MINIMAL:
+        return {"id": project.id, "name": project.name}
+    elif detail == ResponseDetail.STANDARD:
+        result = {"id": project.id, "name": project.name}
+        if project.kind and project.kind != "TASK":
+            result["kind"] = project.kind
+        if project.view_mode and project.view_mode != "list":
+            result["view_mode"] = project.view_mode
+        return result
+    else:  # FULL
+        return {
+            "id": project.id,
+            "name": project.name,
+            "color": project.color,
+            "kind": project.kind,
+            "view_mode": project.view_mode,
+            "group_id": project.group_id,
+            "closed": project.closed,
+            "sort_order": project.sort_order,
+        }
 
 
-def format_projects_markdown(projects: list[Project], title: str = "Projects") -> str:
-    """Format multiple projects as Markdown."""
+def format_projects_markdown(
+    projects: list[Project],
+    title: str = "Projects",
+    detail: ResponseDetail = ResponseDetail.STANDARD,
+) -> str:
+    """Format multiple projects as Markdown with configurable detail level."""
     if not projects:
         return f"# {title}\n\nNo projects found."
 
     lines = [f"# {title}", "", f"Found {len(projects)} project(s):", ""]
 
     for project in projects:
-        color_indicator = f"({project.color})" if project.color else ""
-        lines.append(f"- **{project.name}** (`{project.id}`) {color_indicator}")
+        if detail == ResponseDetail.MINIMAL:
+            lines.append(f"- **{project.name}** (`{project.id}`)")
+        else:  # STANDARD or FULL
+            color_indicator = f"({project.color})" if project.color else ""
+            lines.append(f"- **{project.name}** (`{project.id}`) {color_indicator}")
 
     return "\n".join(lines)
 
 
-def format_projects_json(projects: list[Project]) -> dict[str, Any]:
-    """Format multiple projects as JSON."""
+def format_projects_json(
+    projects: list[Project],
+    detail: ResponseDetail = ResponseDetail.STANDARD,
+) -> dict[str, Any]:
+    """Format multiple projects as JSON with configurable detail level."""
     return {
         "count": len(projects),
-        "projects": [format_project_json(p) for p in projects],
+        "projects": [format_project_json(p, detail=detail) for p in projects],
     }
 
 
