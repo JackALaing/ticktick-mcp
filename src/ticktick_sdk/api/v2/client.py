@@ -1238,6 +1238,7 @@ class TickTickV2Client(BaseTickTickClient):
             List of habits
         """
         response = await self._get_json("/habits")
+        logger.info("get_habits response: %d habits", len(response) if isinstance(response, list) else 0)
         return response
 
     async def get_habit_sections(self) -> list[HabitSectionV2]:
@@ -1285,7 +1286,9 @@ class TickTickV2Client(BaseTickTickClient):
             "update": update or [],
             "delete": delete or [],
         }
+        logger.info("batch_habits request: %s", data)
         response = await self._post_json("/habits/batch", json_data=data)
+        logger.info("batch_habits response: %s", response)
         return response
 
     async def create_habit(
