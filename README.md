@@ -55,7 +55,21 @@ All mutation operations support **batch processing** (1-100 items per call).
 
 ## Installation
 
-### Claude Code
+### Claude.ai (Remote MCP via Railway)
+
+Deploy to Railway for Claude.ai integration:
+
+1. Fork this repo and connect to [Railway](https://railway.app)
+2. Add environment variables in Railway dashboard (see [Environment Variables](#environment-variables))
+3. Deploy - Railway will build using the included `Dockerfile`
+4. Add the SSE endpoint to Claude.ai's MCP settings:
+   ```
+   https://your-app.up.railway.app/sse
+   ```
+
+The server uses SSE transport at `/sse` for Claude.ai compatibility.
+
+### Claude Code (Local)
 
 ```bash
 pip install ticktick-sdk
