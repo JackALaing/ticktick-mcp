@@ -47,21 +47,18 @@ def main():
     logger.info("SSE endpoint for Claude.ai: http://%s:%s/sse", host, port)
     
     # Import and modify the mcp instance before running
-    from ticktick_sdk.server import mcp, _apply_tool_filtering
-    
+    from ticktick_sdk.server import mcp
+
     # Update settings on the mcp instance for cloud deployment
     mcp.settings.host = host
     mcp.settings.port = port
-    
+
     # For Railway/cloud deployments, disable DNS rebinding protection
     # since we're behind a reverse proxy with a different hostname
     mcp.settings.transport_security.enable_dns_rebinding_protection = False
     mcp.settings.transport_security.allowed_hosts = ["*"]
     mcp.settings.transport_security.allowed_origins = ["*"]
-    
-    # Apply any tool filtering from environment
-    _apply_tool_filtering()
-    
+
     # Run with SSE transport for Claude.ai compatibility
     # The SSE endpoint will be available at /sse by default
     mcp.run(transport="sse")
