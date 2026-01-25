@@ -14,13 +14,6 @@ class ResponseFormat(str, Enum):
     JSON = "json"
 
 
-class ResponseDetail(str, Enum):
-    """Detail level. Lower = fewer tokens."""
-    MINIMAL = "minimal"
-    STANDARD = "standard"
-    FULL = "full"
-
-
 # =============================================================================
 # Consolidated Tasks Input
 # =============================================================================

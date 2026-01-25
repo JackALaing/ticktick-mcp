@@ -2,7 +2,6 @@
 
 from ticktick_sdk.tools.inputs import (
     ResponseFormat,
-    ResponseDetail,
     TasksInput,
     ProjectsInput,
     FoldersInput,
@@ -12,7 +11,6 @@ from ticktick_sdk.tools.inputs import (
 
 __all__ = [
     "ResponseFormat",
-    "ResponseDetail",
     "TasksInput",
     "ProjectsInput",
     "FoldersInput",
