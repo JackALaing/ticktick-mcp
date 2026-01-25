@@ -1,4 +1,4 @@
-"""TickTick SDK Tools Package - Consolidated Architecture (Phase 4)."""
+"""TickTick SDK Tools Package."""
 
 from ticktick_sdk.tools.inputs import (
     ResponseFormat,
@@ -7,10 +7,7 @@ from ticktick_sdk.tools.inputs import (
     ProjectsInput,
     FoldersInput,
     TagsInput,
-    HabitsInput,
     ColumnsInput,
-    UserInput,
-    FocusInput,
 )
 
 __all__ = [
@@ -20,8 +17,5 @@ __all__ = [
     "ProjectsInput",
     "FoldersInput",
     "TagsInput",
-    "HabitsInput",
     "ColumnsInput",
-    "UserInput",
-    "FocusInput",
 ]

@@ -1,7 +1,4 @@
-"""Consolidated Pydantic Input Models for TickTick SDK Tools.
-
-Phase 4: Action-based routing consolidates 43 tools → 6 tools.
-"""
+"""Consolidated Pydantic Input Models for TickTick SDK Tools."""
 
 from __future__ import annotations
 
@@ -184,61 +181,7 @@ class TagsInput(BaseModel):
 
 
 # =============================================================================
-# Consolidated Habits Input
-# =============================================================================
-
-
-class HabitsInput(BaseModel):
-    """All habit operations."""
-    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-
-    action: Literal["list", "get", "sections", "create", "update", "delete", "checkin", "checkins"]
-
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
-
-    # For get/update/delete
-    habit_id: Optional[str] = Field(default=None, pattern=r"^[a-f0-9]{24}$")
-
-    # For list
-    include_archived: Optional[bool] = Field(default=None)
-
-    # For create/update
-    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    habit_type: Optional[str] = Field(default=None, pattern=r"^(Boolean|Real)$")
-    goal: Optional[float] = Field(default=None, ge=0.1, le=10000)
-    step: Optional[float] = Field(default=None, ge=0.1, le=1000)
-    unit: Optional[str] = Field(default=None, max_length=20)
-    color: Optional[str] = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
-    section_id: Optional[str] = Field(default=None, pattern=r"^[a-f0-9]{24}$")
-    repeat_rule: Optional[str] = Field(default=None)
-    reminders: Optional[List[str]] = Field(default=None, max_length=5)
-    target_days: Optional[int] = Field(default=None, ge=0, le=1000)
-    encouragement: Optional[str] = Field(default=None, max_length=200)
-    archived: Optional[bool] = Field(default=None)
-
-    # For checkin: list of {habit_id, value, checkin_date}
-    checkins: Optional[List[dict]] = Field(default=None)
-
-    # For checkins (history)
-    habit_ids: Optional[List[str]] = Field(default=None)
-    after_stamp: Optional[int] = Field(default=None, ge=0)
-
-    @model_validator(mode="after")
-    def validate_action_params(self) -> "HabitsInput":
-        a = self.action
-        if a in ("get", "update", "delete") and not self.habit_id:
-            raise ValueError(f"{a} requires habit_id")
-        if a == "create" and not self.name:
-            raise ValueError("create requires name")
-        if a == "checkin" and not self.checkins:
-            raise ValueError("checkin requires checkins")
-        if a == "checkins" and not self.habit_ids:
-            raise ValueError("checkins requires habit_ids")
-        return self
-
-
-# =============================================================================
-# Columns Input (kept separate, can be filtered)
+# Columns Input
 # =============================================================================
 
 
@@ -265,35 +208,3 @@ class ColumnsInput(BaseModel):
         if a in ("update", "delete") and (not self.column_id or not self.project_id):
             raise ValueError(f"{a} requires column_id and project_id")
         return self
-
-
-# =============================================================================
-# User Input (kept separate, can be filtered)
-# =============================================================================
-
-
-class UserInput(BaseModel):
-    """User/account operations."""
-    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-
-    action: Literal["profile", "status", "statistics", "preferences"]
-
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
-
-
-# =============================================================================
-# Focus Input (kept separate, can be filtered)
-# =============================================================================
-
-
-class FocusInput(BaseModel):
-    """Focus/pomodoro operations."""
-    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
-
-    action: Literal["heatmap", "by_tag"]
-
-    response_format: ResponseFormat = Field(default=ResponseFormat.MARKDOWN)
-
-    start_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
-    end_date: Optional[str] = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
-    days: Optional[int] = Field(default=None, ge=1, le=365)

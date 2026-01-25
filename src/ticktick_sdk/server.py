@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """TickTick MCP Server - Consolidated Tool Architecture.
 
-Phase 4: 43 tools consolidated to 6 tools using action-based routing.
+6 tools using action-based routing for minimal token overhead.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import asynccontextmanager
-from datetime import date, datetime, timedelta
+from datetime import date
 from typing import Any, AsyncIterator
 
 from mcp.server.fastmcp import FastMCP, Context
@@ -21,12 +21,8 @@ from ticktick_sdk.tools.inputs import (
     ProjectsInput,
     FoldersInput,
     TagsInput,
-    HabitsInput,
     ColumnsInput,
-    UserInput,
-    FocusInput,
 )
-from ticktick_sdk.models import Habit, HabitSection
 from ticktick_sdk.tools.formatting import (
     format_task_markdown,
     format_task_json,
@@ -46,9 +42,6 @@ from ticktick_sdk.tools.formatting import (
     format_column_json,
     format_columns_markdown,
     format_columns_json,
-    format_user_markdown,
-    format_user_status_markdown,
-    format_statistics_markdown,
     success_message,
     error_message,
 )
@@ -114,67 +107,6 @@ def handle_error(e: Exception, operation: str) -> str:
         return error_message(f"Invalid input: {error_str}", "Check parameters.")
     else:
         return error_message(f"Error: {error_str}", f"Type: {error_type}")
-
-
-# =============================================================================
-# Habit Formatting Helpers
-# =============================================================================
-
-
-def format_habit_markdown(habit: Habit) -> str:
-    """Format habit for markdown."""
-    lines = [f"## {habit.name}", f"- **ID**: `{habit.id}`", f"- **Type**: {habit.habit_type}"]
-    if habit.goal:
-        lines.append(f"- **Goal**: {habit.goal} {habit.unit or ''}")
-    lines.append(f"- **Streak**: {habit.current_streak} days")
-    lines.append(f"- **Total**: {habit.total_checkins}")
-    if habit.color:
-        lines.append(f"- **Color**: {habit.color}")
-    if habit.status:
-        lines.append(f"- **Status**: {habit.status}")
-    return "\n".join(lines)
-
-
-def format_habit_json(habit: Habit) -> dict[str, Any]:
-    """Format habit for JSON."""
-    return {
-        "id": habit.id,
-        "name": habit.name,
-        "habit_type": habit.habit_type,
-        "goal": habit.goal,
-        "step": habit.step,
-        "unit": habit.unit,
-        "color": habit.color,
-        "current_streak": habit.current_streak,
-        "total_checkins": habit.total_checkins,
-        "status": habit.status,
-    }
-
-
-def format_habits_markdown(habits: list[Habit]) -> str:
-    """Format multiple habits for markdown."""
-    if not habits:
-        return "No habits found."
-    lines = [f"# {len(habits)} Habits", ""]
-    for habit in habits:
-        lines.append(format_habit_markdown(habit))
-        lines.append("")
-    return "\n".join(lines)
-
-
-def format_habits_json(habits: list[Habit]) -> list[dict[str, Any]]:
-    """Format multiple habits for JSON."""
-    return [format_habit_json(h) for h in habits]
-
-
-def format_section_markdown(section: HabitSection) -> str:
-    """Format habit section for markdown."""
-    return f"- **{section.name}**: `{section.id}`"
-
-
-def format_sections_json(sections: list[HabitSection]) -> list[dict[str, Any]]:
-    """Format habit sections for JSON."""
-    return [{"id": s.id, "name": s.name} for s in sections]
 
 
 # =============================================================================
@@ -466,133 +398,6 @@ async def ticktick_tags(params: TagsInput, ctx: Context) -> str:
 
 
 # =============================================================================
-# CONSOLIDATED TOOL: Habits
-# =============================================================================
-
-
-@mcp.tool(name="ticktick_habits")
-async def ticktick_habits(params: HabitsInput, ctx: Context) -> str:
-    """Habit operations: list, get, sections, create, update, delete, checkin, checkins."""
-    try:
-        client = get_client(ctx)
-        action = params.action
-
-        if action == "list":
-            habits = await client.get_all_habits()
-            if params.response_format == ResponseFormat.MARKDOWN:
-                return format_habits_markdown(habits)
-            return json.dumps(format_habits_json(habits), indent=2)
-
-        elif action == "get":
-            habit = await client.get_habit(params.habit_id)
-            if params.response_format == ResponseFormat.MARKDOWN:
-                return format_habit_markdown(habit)
-            return json.dumps(format_habit_json(habit), indent=2)
-
-        elif action == "sections":
-            sections = await client.get_habit_sections()
-            if params.response_format == ResponseFormat.MARKDOWN:
-                lines = ["# Habit Sections", ""]
-                for s in sections:
-                    lines.append(format_section_markdown(s))
-                return "\n".join(lines)
-            return json.dumps(format_sections_json(sections), indent=2)
-
-        elif action == "create":
-            habit = await client.create_habit(
-                name=params.name,
-                habit_type=params.habit_type or "Boolean",
-                goal=params.goal or 1.0,
-                step=params.step or 1.0,
-                unit=params.unit or "Count",
-                color=params.color or "#97E38B",
-                section_id=params.section_id,
-                repeat_rule=params.repeat_rule or "RRULE:FREQ=WEEKLY;BYDAY=SU,MO,TU,WE,TH,FR,SA",
-                reminders=params.reminders,
-                target_days=params.target_days or 0,
-                encouragement=params.encouragement or "",
-            )
-            if params.response_format == ResponseFormat.MARKDOWN:
-                return f"# Habit Created\n\n{format_habit_markdown(habit)}"
-            return json.dumps({"success": True, "habit": format_habit_json(habit)}, indent=2)
-
-        elif action == "update":
-            if params.archived is not None:
-                if params.archived:
-                    habit = await client.archive_habit(params.habit_id)
-                    action_str = "archived"
-                else:
-                    habit = await client.unarchive_habit(params.habit_id)
-                    action_str = "unarchived"
-                if not any([params.name, params.goal, params.step, params.unit, params.color,
-                           params.section_id, params.repeat_rule, params.reminders,
-                           params.target_days, params.encouragement]):
-                    if params.response_format == ResponseFormat.MARKDOWN:
-                        return f"# Habit {action_str.capitalize()}\n\n**{habit.name}** has been {action_str}."
-                    return json.dumps({"success": True, "action": action_str, "habit": format_habit_json(habit)}, indent=2)
-
-            habit = await client.update_habit(
-                habit_id=params.habit_id,
-                name=params.name,
-                goal=params.goal,
-                step=params.step,
-                unit=params.unit,
-                color=params.color,
-                section_id=params.section_id,
-                repeat_rule=params.repeat_rule,
-                reminders=params.reminders,
-                target_days=params.target_days,
-                encouragement=params.encouragement,
-            )
-            if params.response_format == ResponseFormat.MARKDOWN:
-                return f"# Habit Updated\n\n{format_habit_markdown(habit)}"
-            return json.dumps({"success": True, "habit": format_habit_json(habit)}, indent=2)
-
-        elif action == "delete":
-            await client.delete_habit(params.habit_id)
-            return success_message(f"Habit `{params.habit_id}` deleted.")
-
-        elif action == "checkin":
-            checkin_data = params.checkins or []
-            results = await client.checkin_habits(checkin_data)
-            if params.response_format == ResponseFormat.MARKDOWN:
-                lines = [f"# {len(results)} Check-in(s) Recorded", ""]
-                for habit_id, habit in results.items():
-                    lines.append(f"## {habit.name}")
-                    lines.append(f"- **Total**: {habit.total_checkins}")
-                    lines.append(f"- **Streak**: {habit.current_streak}")
-                    lines.append("")
-                return "\n".join(lines)
-            return json.dumps({"success": True, "count": len(results), "habits": {hid: format_habit_json(h) for hid, h in results.items()}}, indent=2)
-
-        elif action == "checkins":
-            data = await client.get_habit_checkins(
-                habit_ids=params.habit_ids,
-                after_stamp=params.after_stamp or 0,
-            )
-            if params.response_format == ResponseFormat.MARKDOWN:
-                lines = ["# Habit Check-in History", ""]
-                for habit_id, checkins in data.items():
-                    lines.append(f"## Habit `{habit_id}`")
-                    if not checkins:
-                        lines.append("No check-ins found.")
-                    else:
-                        for c in checkins:
-                            lines.append(f"- {c.checkin_stamp}: {c.value}")
-                    lines.append("")
-                return "\n".join(lines)
-            result = {}
-            for habit_id, checkins in data.items():
-                result[habit_id] = [{"checkin_stamp": c.checkin_stamp, "value": c.value, "goal": c.goal, "status": c.status} for c in checkins]
-            return json.dumps(result, indent=2)
-
-        return error_message(f"Unknown action: {action}", "")
-
-    except Exception as e:
-        return handle_error(e, f"habits.{params.action}")
-
-
-# =============================================================================
 # CONSOLIDATED TOOL: Columns (Kanban)
 # =============================================================================
 
@@ -639,97 +444,6 @@ async def ticktick_columns(params: ColumnsInput, ctx: Context) -> str:
 
     except Exception as e:
         return handle_error(e, f"columns.{params.action}")
-
-
-# =============================================================================
-# CONSOLIDATED TOOL: User
-# =============================================================================
-
-
-@mcp.tool(name="ticktick_user")
-async def ticktick_user(params: UserInput, ctx: Context) -> str:
-    """User operations: profile, status, statistics, preferences."""
-    try:
-        client = get_client(ctx)
-        action = params.action
-
-        if action == "profile":
-            user = await client.get_profile()
-            if params.response_format == ResponseFormat.MARKDOWN:
-                return format_user_markdown(user)
-            return json.dumps({"id": user.id, "username": user.username, "name": user.name, "email": user.email, "timezone": user.time_zone}, indent=2)
-
-        elif action == "status":
-            status = await client.get_status()
-            if params.response_format == ResponseFormat.MARKDOWN:
-                return format_user_status_markdown(status)
-            return json.dumps({"inbox_id": status.inbox_id, "pro": status.is_pro, "subscription": status.subscription_type}, indent=2)
-
-        elif action == "statistics":
-            stats = await client.get_statistics()
-            if params.response_format == ResponseFormat.MARKDOWN:
-                return format_statistics_markdown(stats)
-            return json.dumps(stats.__dict__ if hasattr(stats, "__dict__") else str(stats), indent=2)
-
-        elif action == "preferences":
-            prefs = await client.get_preferences()
-            return json.dumps(prefs, indent=2)
-
-        return error_message(f"Unknown action: {action}", "")
-
-    except Exception as e:
-        return handle_error(e, f"user.{params.action}")
-
-
-# =============================================================================
-# CONSOLIDATED TOOL: Focus
-# =============================================================================
-
-
-@mcp.tool(name="ticktick_focus")
-async def ticktick_focus(params: FocusInput, ctx: Context) -> str:
-    """Focus/pomodoro operations: heatmap, by_tag."""
-    try:
-        client = get_client(ctx)
-        action = params.action
-        days = params.days or 30
-
-        if params.start_date and params.end_date:
-            start = datetime.fromisoformat(params.start_date)
-            end = datetime.fromisoformat(params.end_date)
-        else:
-            end = datetime.now()
-            start = end - timedelta(days=days)
-
-        if action == "heatmap":
-            data = await client.get_focus_heatmap(start_date=start, end_date=end)
-            if params.response_format == ResponseFormat.MARKDOWN:
-                lines = ["# Focus Heatmap", f"Period: {start.date()} to {end.date()}", ""]
-                if hasattr(data, "items"):
-                    for date_str, minutes in data.items():
-                        lines.append(f"- {date_str}: {minutes} min")
-                return "\n".join(lines) if lines else "No focus data found."
-            return json.dumps(data, indent=2, default=str)
-
-        elif action == "by_tag":
-            data = await client.get_focus_by_tag(start_date=start, end_date=end)
-            if params.response_format == ResponseFormat.MARKDOWN:
-                lines = ["# Focus by Tag", f"Period: {start.date()} to {end.date()}", ""]
-                if hasattr(data, "items"):
-                    for tag, minutes in data.items():
-                        lines.append(f"- {tag}: {minutes} min")
-                return "\n".join(lines) if lines else "No focus data found."
-            return json.dumps(data, indent=2, default=str)
-
-        return error_message(f"Unknown action: {action}", "")
-
-    except Exception as e:
-        return handle_error(e, f"focus.{params.action}")
-
-
-# =============================================================================
-# Help Tool
-# =============================================================================
 
 
 @mcp.tool(name="ticktick_help")

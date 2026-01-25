@@ -1,4 +1,4 @@
-"""TickTick MCP Help Documentation - Consolidated Architecture (Phase 4)."""
+"""TickTick MCP Help Documentation."""
 
 TOOL_DOCS = {
     "ticktick_tasks": """
@@ -251,95 +251,6 @@ Merge source tag into target.
 ```
 """,
 
-    "ticktick_habits": """
-## ticktick_habits
-
-Habit operations: list, get, sections, create, update, delete, checkin, checkins.
-
-### Parameters
-- **action** (str, required): One of the actions below
-- **response_format** (str): 'markdown' (default) or 'json'
-
-### Actions
-
-#### list
-List all habits.
-- **include_archived** (bool): Include archived (default false)
-
-```json
-{"action": "list"}
-```
-
-#### get
-Get habit by ID.
-- **habit_id** (str, required)
-
-```json
-{"action": "get", "habit_id": "abc123"}
-```
-
-#### sections
-List habit sections (Morning, Afternoon, Night).
-
-```json
-{"action": "sections"}
-```
-
-#### create
-Create a habit.
-- **name** (str, required)
-- **habit_type** (str): 'Boolean' (default) or 'Real'
-- **goal** (float): Target value
-- **step** (float): Increment
-- **unit** (str): Unit of measurement
-- **color** (str): Hex color
-- **section_id** (str): Time-of-day section
-- **repeat_rule** (str): RRULE pattern
-- **reminders** (list[str]): HH:MM times
-- **target_days** (int): Goal in days
-- **encouragement** (str): Message
-
-```json
-{"action": "create", "name": "Exercise", "habit_type": "Boolean"}
-{"action": "create", "name": "Water", "habit_type": "Real", "goal": 8, "unit": "glasses"}
-```
-
-#### update
-Update habit properties.
-- **habit_id** (str, required)
-- All create fields plus **archived** (bool)
-
-```json
-{"action": "update", "habit_id": "abc123", "archived": true}
-```
-
-#### delete
-Delete habit and history.
-- **habit_id** (str, required)
-
-```json
-{"action": "delete", "habit_id": "abc123"}
-```
-
-#### checkin
-Record check-ins.
-- **checkins** (list): [{habit_id, value (default 1.0), checkin_date (YYYY-MM-DD)}, ...]
-
-```json
-{"action": "checkin", "checkins": [{"habit_id": "abc123"}]}
-```
-**Note:** Backdated check-ins don't affect streak.
-
-#### checkins
-Get check-in history.
-- **habit_ids** (list[str], required)
-- **after_stamp** (int): YYYYMMDD to get check-ins after
-
-```json
-{"action": "checkins", "habit_ids": ["abc123", "def456"]}
-```
-""",
-
     "ticktick_columns": """
 ## ticktick_columns
 
@@ -390,75 +301,6 @@ Delete a column (tasks become unassigned).
 ```
 """,
 
-    "ticktick_user": """
-## ticktick_user
-
-User operations: profile, status, statistics, preferences.
-
-### Parameters
-- **action** (str, required): One of the actions below
-- **response_format** (str): 'markdown' (default) or 'json'
-
-### Actions
-
-#### profile
-Get user profile (username, name, email, locale).
-
-```json
-{"action": "profile"}
-```
-
-#### status
-Get account status (inbox ID, Pro status, subscription).
-
-```json
-{"action": "status"}
-```
-
-#### statistics
-Get productivity stats (level, score, completions).
-
-```json
-{"action": "statistics"}
-```
-
-#### preferences
-Get user settings (timezone, week start, date format).
-
-```json
-{"action": "preferences"}
-```
-""",
-
-    "ticktick_focus": """
-## ticktick_focus
-
-Focus/pomodoro operations: heatmap, by_tag.
-
-### Parameters
-- **action** (str, required): One of the actions below
-- **start_date** (str): YYYY-MM-DD
-- **end_date** (str): YYYY-MM-DD
-- **days** (int): Lookback days (default 30)
-- **response_format** (str): 'markdown' (default) or 'json'
-
-### Actions
-
-#### heatmap
-Get focus time heatmap data.
-
-```json
-{"action": "heatmap", "days": 30}
-```
-
-#### by_tag
-Get focus time distribution by tag.
-
-```json
-{"action": "by_tag", "start_date": "2026-01-01", "end_date": "2026-01-31"}
-```
-""",
-
     "ticktick_help": """
 ## ticktick_help
 
@@ -481,12 +323,7 @@ TOOL_CATEGORIES = {
         "ticktick_projects",
         "ticktick_folders",
         "ticktick_tags",
-        "ticktick_habits",
-    ],
-    "Additional Tools": [
         "ticktick_columns",
-        "ticktick_user",
-        "ticktick_focus",
         "ticktick_help",
     ],
 }
@@ -506,10 +343,7 @@ def get_help(tool_name: str | None = None) -> str:
         lines.append("| `ticktick_projects` | list, get, create, update, delete |")
         lines.append("| `ticktick_folders` | list, create, rename, delete |")
         lines.append("| `ticktick_tags` | list, create, update, delete, merge |")
-        lines.append("| `ticktick_habits` | list, get, sections, create, update, delete, checkin, checkins |")
         lines.append("| `ticktick_columns` | list, create, update, delete |")
-        lines.append("| `ticktick_user` | profile, status, statistics, preferences |")
-        lines.append("| `ticktick_focus` | heatmap, by_tag |")
         lines.append("| `ticktick_help` | Get documentation |")
         return "\n".join(lines)
 
