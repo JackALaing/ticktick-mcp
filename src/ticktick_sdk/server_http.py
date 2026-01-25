@@ -21,7 +21,7 @@ Optional:
 
 Claude.ai Integration:
     Add this URL to Claude.ai's MCP settings:
-    https://your-railway-url.up.railway.app/sse
+    https://your-railway-url.up.railway.app/mcp
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def main():
     host = os.environ.get("HOST", "0.0.0.0")
     
     logger.info("Starting TickTick MCP Server on %s:%s", host, port)
-    logger.info("SSE endpoint for Claude.ai: http://%s:%s/sse", host, port)
+    logger.info("MCP endpoint for Claude.ai: http://%s:%s/mcp", host, port)
     
     # Import and modify the mcp instance before running
     from ticktick_sdk.server import mcp
@@ -59,9 +59,9 @@ def main():
     mcp.settings.transport_security.allowed_hosts = ["*"]
     mcp.settings.transport_security.allowed_origins = ["*"]
 
-    # Run with SSE transport for Claude.ai compatibility
-    # The SSE endpoint will be available at /sse by default
-    mcp.run(transport="sse")
+    # Run with Streamable HTTP transport for Claude.ai compatibility
+    # The MCP endpoint will be available at /mcp by default
+    mcp.run(transport="http")
 
 
 if __name__ == "__main__":
