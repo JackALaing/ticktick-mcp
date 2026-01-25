@@ -946,6 +946,7 @@ class UnifiedTickTickAPI:
                 - recurrence (optional): RRULE recurrence pattern
                 - tags (optional): List of tag names
                 - parent_id (optional): Parent task ID for subtasks
+                - column_id (optional): Kanban column ID (set after creation)
 
         Returns:
             List of created Task objects
@@ -1025,6 +1026,15 @@ class UnifiedTickTickAPI:
             # Set parent if requested
             if parent_id:
                 await self._v2_client.set_task_parent(task_id, project_id, parent_id)  # type: ignore
+
+            # Set column_id if requested (API doesn't support it at creation time)
+            column_id = task_spec.get("column_id")
+            if column_id:
+                await self._v2_client.update_task(  # type: ignore
+                    task_id=task_id,
+                    project_id=project_id,
+                    column_id=column_id,
+                )
 
             # Fetch the created task
             results.append(await self.get_task(task_id, project_id))
