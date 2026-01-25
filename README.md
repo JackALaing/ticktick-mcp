@@ -2,7 +2,7 @@
 
 A token-optimized [MCP](https://modelcontextprotocol.io/) (Model Context Protocol) server for [TickTick](https://ticktick.com), designed for AI assistants like Claude.
 
-**Fork of [ticktick-sdk](https://github.com/dev-mirzabicer/ticktick-sdk)** - Consolidated from 43 tools to 6 action-based tools, achieving **94% reduction in token usage**.
+**Fork of [ticktick-sdk](https://github.com/dev-mirzabicer/ticktick-sdk)** - Consolidated from 43 tools to 6 action-based tools, achieving **~87% reduction in context overhead**.
 
 ## Why This Fork?
 
@@ -11,8 +11,10 @@ The original ticktick-sdk exposed 43 individual MCP tools. While comprehensive, 
 | Metric | Original | This Fork | Improvement |
 |--------|----------|-----------|-------------|
 | **Tool Count** | 43 tools | 6 tools | 86% fewer |
-| **Token Usage** | ~25,000 tokens | ~1,500 tokens | **94% reduction** |
+| **Schema Tokens** | ~10,600 tokens | ~840 tokens | **~92% reduction** |
 | **Context Efficiency** | Low | High | Faster responses |
+
+*Token estimates based on docstrings + JSON schema overhead at ~4 chars/token.*
 
 ### What Changed
 
@@ -54,15 +56,7 @@ All mutation operations support **batch processing** (1-100 items per call).
 
 ## Installation
 
-### Claude.ai (Cloud MCP)
-
-This server is deployed on Railway with SSE transport for Claude.ai integration:
-
-**URL**: `https://ticktick-mcp-production.up.railway.app/sse`
-
-Add to Claude.ai's MCP settings with your TickTick credentials.
-
-### Claude Code (Local)
+### Claude Code
 
 ```bash
 pip install ticktick-sdk
