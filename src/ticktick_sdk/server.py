@@ -274,7 +274,10 @@ async def ticktick_tasks(params: TasksInput, ctx: Context) -> str:
             return success_message(f"{len(params.tasks or [])} task(s) pin status updated.")
 
         elif action == "search":
-            tasks = await client.search_tasks(params.query, limit=params.limit or 20)
+            tasks = await client.search_tasks(params.query)
+            # Apply limit client-side since search_tasks doesn't support it
+            limit = params.limit or 20
+            tasks = tasks[:limit]
             if params.response_format == ResponseFormat.MARKDOWN:
                 return format_tasks_markdown(tasks, f"Search: {params.query}")
             return json.dumps(format_tasks_json(tasks), indent=2)
@@ -308,7 +311,7 @@ async def ticktick_projects(params: ProjectsInput, ctx: Context) -> str:
         action = params.action
 
         if action == "list":
-            projects = await client.get_projects()
+            projects = await client.get_all_projects()
             if params.response_format == ResponseFormat.MARKDOWN:
                 return format_projects_markdown(projects)
             return json.dumps(format_projects_json(projects), indent=2)
@@ -378,7 +381,7 @@ async def ticktick_folders(params: FoldersInput, ctx: Context) -> str:
         action = params.action
 
         if action == "list":
-            folders = await client.get_folders()
+            folders = await client.get_all_folders()
             if params.response_format == ResponseFormat.MARKDOWN:
                 return format_folders_markdown(folders)
             return json.dumps(format_folders_json(folders), indent=2)
@@ -418,7 +421,7 @@ async def ticktick_tags(params: TagsInput, ctx: Context) -> str:
         action = params.action
 
         if action == "list":
-            tags = await client.get_tags()
+            tags = await client.get_all_tags()
             if params.response_format == ResponseFormat.MARKDOWN:
                 return format_tags_markdown(tags)
             return json.dumps(format_tags_json(tags), indent=2)
@@ -475,7 +478,7 @@ async def ticktick_habits(params: HabitsInput, ctx: Context) -> str:
         action = params.action
 
         if action == "list":
-            habits = await client.get_habits(include_archived=params.include_archived or False)
+            habits = await client.get_all_habits()
             if params.response_format == ResponseFormat.MARKDOWN:
                 return format_habits_markdown(habits)
             return json.dumps(format_habits_json(habits), indent=2)
@@ -651,7 +654,7 @@ async def ticktick_user(params: UserInput, ctx: Context) -> str:
         action = params.action
 
         if action == "profile":
-            user = await client.get_user_profile()
+            user = await client.get_profile()
             if params.response_format == ResponseFormat.MARKDOWN:
                 return format_user_markdown(user)
             return json.dumps({"id": user.id, "username": user.username, "name": user.name, "email": user.email, "timezone": user.time_zone}, indent=2)
@@ -669,7 +672,7 @@ async def ticktick_user(params: UserInput, ctx: Context) -> str:
             return json.dumps(stats.__dict__ if hasattr(stats, "__dict__") else str(stats), indent=2)
 
         elif action == "preferences":
-            prefs = await client.get_user_preferences()
+            prefs = await client.get_preferences()
             return json.dumps(prefs, indent=2)
 
         return error_message(f"Unknown action: {action}", "")

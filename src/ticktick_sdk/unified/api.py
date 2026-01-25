@@ -1097,7 +1097,9 @@ class UnifiedTickTickAPI:
                 priority = update["priority"]
                 if isinstance(priority, str):
                     priority_map = {"none": 0, "low": 1, "medium": 3, "high": 5}
-                    priority = priority_map.get(priority.lower(), int(priority))
+                    priority = priority_map.get(priority.lower(), priority)
+                    if isinstance(priority, str):
+                        priority = int(priority)  # Fallback for numeric strings
                 v2_update["priority"] = priority
             if "start_date" in update and update["start_date"] is not None:
                 start_date = update["start_date"]
