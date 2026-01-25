@@ -11,10 +11,9 @@ The original ticktick-sdk exposed 43 individual MCP tools. While comprehensive, 
 | Metric | Original | This Fork | Improvement |
 |--------|----------|-----------|-------------|
 | **Tool Count** | 43 tools | 6 tools | 86% fewer |
-| **Schema Tokens** | ~10,600 tokens | ~840 tokens | **~92% reduction** |
-| **Context Efficiency** | Low | High | Faster responses |
+| **Context Overhead** | ~14,000 tokens | ~1,800 tokens | **87% reduction** |
 
-*Token estimates based on docstrings + JSON schema overhead at ~4 chars/token.*
+*Token estimates include docstrings, annotations, and JSON schemas at ~4 chars/token.*
 
 ### What Changed
 
