@@ -119,13 +119,24 @@ def format_task_json(task: Task, include_content: bool = True) -> dict[str, Any]
 
 
 def format_tasks_markdown(tasks: list[Task], title: str = "Tasks") -> str:
-    """Format multiple tasks as Markdown list."""
+    """Format multiple tasks as Markdown list with hierarchy."""
     if not tasks:
         return f"# {title}\n\nNo tasks found."
 
-    lines = [f"# {title}", "", f"Found {len(tasks)} task(s):", ""]
+    # Build parent-child map for hierarchy
+    task_map = {t.id: t for t in tasks}
+    children: dict[str, list[Task]] = {}
+    top_level: list[Task] = []
 
     for task in tasks:
+        if task.parent_id and task.parent_id in task_map:
+            children.setdefault(task.parent_id, []).append(task)
+        else:
+            top_level.append(task)
+
+    lines = [f"# {title}", "", f"Found {len(tasks)} task(s):", ""]
+
+    def format_task_line(task: Task, indent: int = 0) -> None:
         task_title = task.title or "(No title)"
         parts = [f"**{task_title}** (`{task.id}`)"]
 
@@ -136,7 +147,15 @@ def format_tasks_markdown(tasks: list[Task], title: str = "Tasks") -> str:
         if task.tags:
             parts.append(f"Tags: {', '.join(task.tags)}")
 
-        lines.append(f"- {' | '.join(parts)}")
+        prefix = "  " * indent
+        lines.append(f"{prefix}- {' | '.join(parts)}")
+
+        # Recursively add children
+        for child in children.get(task.id, []):
+            format_task_line(child, indent + 1)
+
+    for task in top_level:
+        format_task_line(task)
 
     return "\n".join(lines)
 
