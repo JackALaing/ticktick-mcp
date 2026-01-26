@@ -123,6 +123,11 @@ async def ticktick_tasks(params: TasksInput, ctx: Context) -> str:
 
         if action == "create":
             task_specs = params.tasks or []
+            # Apply top-level project_id as default if not specified in each task
+            if params.project_id:
+                for spec in task_specs:
+                    if "project_id" not in spec:
+                        spec["project_id"] = params.project_id
             created = await client.create_tasks(task_specs)
             if params.response_format == ResponseFormat.MARKDOWN:
                 if len(created) == 1:

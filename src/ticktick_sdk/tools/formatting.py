@@ -130,7 +130,7 @@ def format_tasks_markdown(tasks: list[Task], title: str = "Tasks") -> str:
         parts = [f"**{task_title}** (`{task.id}`)"]
 
         if task.priority and task.priority > 0:
-            parts.append(f"P{task.priority}")
+            parts.append(priority_label(task.priority))
         if task.due_date:
             parts.append(f"Due: {format_date(task.due_date)}")
         if task.tags:
