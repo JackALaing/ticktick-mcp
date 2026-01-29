@@ -1011,7 +1011,7 @@ class UnifiedTickTickAPI:
                 time_zone=task_spec.get("time_zone"),
                 is_all_day=task_spec.get("all_day"),
                 reminders=reminders,
-                repeat_flag=task_spec.get("recurrence"),
+                repeat_flag=task_spec.get("recurrence") or task_spec.get("repeat_flag"),
                 tags=task_spec.get("tags"),
             )
 
@@ -1127,8 +1127,10 @@ class UnifiedTickTickAPI:
                 v2_update["isAllDay"] = update["all_day"]
             if "tags" in update and update["tags"] is not None:
                 v2_update["tags"] = update["tags"]
-            if "recurrence" in update and update["recurrence"] is not None:
-                v2_update["repeatFlag"] = update["recurrence"]
+            # Accept both "recurrence" and "repeat_flag" for consistency
+            recurrence_value = update.get("recurrence") or update.get("repeat_flag")
+            if recurrence_value is not None:
+                v2_update["repeatFlag"] = recurrence_value
             if "column_id" in update:
                 # column_id can be empty string to remove from column
                 v2_update["columnId"] = update["column_id"] if update["column_id"] else ""
