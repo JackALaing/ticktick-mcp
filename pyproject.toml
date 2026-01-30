@@ -61,6 +61,7 @@ dev = [
 [project.scripts]
 ticktick-sdk = "ticktick_sdk.cli:cli_main"
 ticktick-sdk-http = "ticktick_sdk.server_http:main"
+ticktick = "ticktick_sdk.fast_cli:cli_main"
 
 [project.urls]
 Homepage = "https://github.com/dev-mirzabicer/ticktick-sdk"
