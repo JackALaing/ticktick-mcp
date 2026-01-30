@@ -147,19 +147,27 @@ class CachedAPI:
     async def list_tasks(
         self,
         project_id: str = None,
+        column_id: str = None,
         tag: str = None,
         priority: int = None,
         due_today: bool = None,
         overdue: bool = None,
+        from_date: str = None,
+        to_date: str = None,
+        days: int = None,
         limit: int = None,
     ):
-        from datetime import datetime
+        from datetime import datetime, timedelta
         from ticktick_sdk.models import Task
         from ticktick_sdk.constants import TaskStatus
 
         sync_data = await self._v2.sync()
         tasks = []
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+        # Calculate date range if days is specified
+        if days and not from_date:
+            from_date = (today - timedelta(days=days)).strftime("%Y-%m-%d")
 
         for t in sync_data.get("syncTaskBean", {}).get("update", []):
             task = Task.from_v2(t)
@@ -169,6 +177,9 @@ class CachedAPI:
                 continue
 
             if project_id and task.project_id != project_id:
+                continue
+
+            if column_id and getattr(task, 'column_id', None) != column_id:
                 continue
 
             if tag and tag not in (task.tags or []):
@@ -190,6 +201,21 @@ class CachedAPI:
                 now = datetime.now(task.due_date.tzinfo) if task.due_date.tzinfo else datetime.now()
                 if task.due_date >= now:
                     continue
+
+            # Date range filtering (typically for created/modified date)
+            if from_date:
+                task_date = task.created_time or task.modified_time
+                if task_date:
+                    task_date_str = str(task_date)[:10]
+                    if task_date_str < from_date:
+                        continue
+
+            if to_date:
+                task_date = task.created_time or task.modified_time
+                if task_date:
+                    task_date_str = str(task_date)[:10]
+                    if task_date_str > to_date:
+                        continue
 
             tasks.append(task)
 
@@ -218,35 +244,52 @@ class CachedAPI:
         return await self.get_task(task_id)
 
     async def complete_task(self, task_id: str):
+        await self.complete_tasks([task_id])
+
+    async def complete_tasks(self, task_ids: list[str]):
         from datetime import datetime
         from ticktick_sdk.constants import TaskStatus
         from ticktick_sdk.models import Task
-        task = await self.get_task(task_id)
-        await self._v2.batch_tasks(update=[{
-            "id": task_id,
-            "projectId": task.project_id,
-            "status": TaskStatus.COMPLETED,
-            "completedTime": Task.format_datetime(datetime.now(), "v2"),
-        }])
+        updates = []
+        for task_id in task_ids:
+            task = await self.get_task(task_id)
+            updates.append({
+                "id": task_id,
+                "projectId": task.project_id,
+                "status": TaskStatus.COMPLETED,
+                "completedTime": Task.format_datetime(datetime.now(), "v2"),
+            })
+        await self._v2.batch_tasks(update=updates)
 
     async def delete_task(self, task_id: str):
-        task = await self.get_task(task_id)
-        await self._v2.delete_task(task.project_id, task_id)
+        await self.delete_tasks([task_id])
+
+    async def delete_tasks(self, task_ids: list[str]):
+        for task_id in task_ids:
+            task = await self.get_task(task_id)
+            await self._v2.delete_task(task.project_id, task_id)
 
     async def move_task(self, task_id: str, to_project_id: str):
         task = await self.get_task(task_id)
         await self._v2.move_task(task_id, task.project_id, to_project_id)
 
     async def pin_task(self, task_id: str, pin: bool = True):
+        result = await self.pin_tasks([task_id], pin)
+        return result[0] if result else None
+
+    async def pin_tasks(self, task_ids: list[str], pin: bool = True):
         from datetime import datetime, timezone
-        task = await self.get_task(task_id)
-        if pin:
-            now = datetime.now(timezone.utc)
-            pinned_time = now.strftime("%Y-%m-%dT%H:%M:%S.000+0000")
-            await self._v2.update_task(task_id=task_id, project_id=task.project_id, pinned_time=pinned_time)
-        else:
-            await self._v2.update_task(task_id=task_id, project_id=task.project_id, pinned_time="")
-        return await self.get_task(task_id)
+        results = []
+        for task_id in task_ids:
+            task = await self.get_task(task_id)
+            if pin:
+                now = datetime.now(timezone.utc)
+                pinned_time = now.strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+                await self._v2.update_task(task_id=task_id, project_id=task.project_id, pinned_time=pinned_time)
+            else:
+                await self._v2.update_task(task_id=task_id, project_id=task.project_id, pinned_time="")
+            results.append(await self.get_task(task_id))
+        return results
 
     async def search_tasks(self, query: str):
         tasks = await self.list_tasks()
@@ -269,8 +312,8 @@ class CachedAPI:
         data = await self._v2.sync()
         return [Tag.from_v2(t) for t in data.get("tags", [])]
 
-    async def create_tag(self, name: str, color: str = None):
-        await self._v2.create_tag(name=name, color=color)
+    async def create_tag(self, name: str, color: str = None, parent: str = None):
+        await self._v2.create_tag(name=name, color=color, parent=parent)
         tags = await self.list_tags()
         for t in tags:
             if t.name == name:
@@ -281,12 +324,14 @@ class CachedAPI:
     async def delete_tag(self, name: str):
         await self._v2.delete_tag(name)
 
-    async def update_tag(self, name: str, new_name: str = None, color: str = None):
+    async def update_tag(self, name: str, new_name: str = None, color: str = None, parent: str = None):
         kwargs = {}
         if new_name:
             kwargs["label"] = new_name
         if color:
             kwargs["color"] = color
+        if parent is not None:  # Allow empty string to remove parent
+            kwargs["parent"] = parent
         await self._v2.update_tag(name=name, **kwargs)
         tags = await self.list_tags()
         target_name = new_name or name
@@ -332,25 +377,33 @@ class CachedAPI:
         data = await self._v2.get_columns(project_id)
         return [Column.from_v2(c) for c in data]
 
-    async def create_column(self, project_id: str, name: str):
+    async def create_column(self, project_id: str, name: str, sort_order: int = None):
         from ticktick_sdk.models import Column
-        response = await self._v2.create_column(project_id=project_id, name=name)
+        kwargs = {"project_id": project_id, "name": name}
+        if sort_order is not None:
+            kwargs["sort_order"] = sort_order
+        response = await self._v2.create_column(**kwargs)
         column_id = next(iter(response.get("id2etag", {}).keys()), None)
         if column_id:
             columns = await self.list_columns(project_id)
             for c in columns:
                 if c.id == column_id:
                     return c
-        return Column(id=column_id or "", name=name, project_id=project_id, sort_order=0)
+        return Column(id=column_id or "", name=name, project_id=project_id, sort_order=sort_order or 0)
 
-    async def update_column(self, column_id: str, project_id: str, name: str):
-        await self._v2.update_column(column_id=column_id, project_id=project_id, name=name)
+    async def update_column(self, column_id: str, project_id: str, name: str = None, sort_order: int = None):
+        kwargs = {"column_id": column_id, "project_id": project_id}
+        if name:
+            kwargs["name"] = name
+        if sort_order is not None:
+            kwargs["sort_order"] = sort_order
+        await self._v2.update_column(**kwargs)
         columns = await self.list_columns(project_id)
         for c in columns:
             if c.id == column_id:
                 return c
         from ticktick_sdk.models import Column
-        return Column(id=column_id, name=name, project_id=project_id, sort_order=0)
+        return Column(id=column_id, name=name or "", project_id=project_id, sort_order=sort_order or 0)
 
     async def delete_column(self, column_id: str, project_id: str):
         await self._v2.delete_column(column_id, project_id)
@@ -400,6 +453,8 @@ def fmt_tag(tag) -> dict:
     r = {"name": d["name"]}
     if d.get("color"):
         r["color"] = d["color"]
+    if d.get("parent"):
+        r["parent"] = d["parent"]
     return r
 
 
@@ -410,7 +465,10 @@ def fmt_folder(folder) -> dict:
 
 def fmt_column(col) -> dict:
     d = col.model_dump()
-    return {"id": d["id"], "name": d["name"]}
+    r = {"id": d["id"], "name": d["name"]}
+    if d.get("sort_order") is not None:
+        r["sort"] = d["sort_order"]
+    return r
 
 
 def output(data):
@@ -430,10 +488,14 @@ async def cmd_tasks_list(args):
         priority = priority_map.get(args.priority) if args.priority else None
         tasks = await api.list_tasks(
             project_id=args.project,
+            column_id=args.column,
             tag=args.tag,
             priority=priority,
             due_today=args.today,
             overdue=args.overdue,
+            from_date=args.from_date,
+            to_date=args.to_date,
+            days=args.days,
             limit=args.limit,
         )
         output([fmt_task_list(t) for t in tasks])
@@ -493,8 +555,8 @@ async def cmd_tasks_edit(args):
 async def cmd_tasks_done(args):
     api = await get_api()
     try:
-        await api.complete_task(args.id)
-        output({"ok": True, "id": args.id})
+        await api.complete_tasks(args.ids)
+        output({"ok": True, "ids": args.ids})
     finally:
         await api.close()
 
@@ -502,8 +564,8 @@ async def cmd_tasks_done(args):
 async def cmd_tasks_rm(args):
     api = await get_api()
     try:
-        await api.delete_task(args.id)
-        output({"ok": True, "id": args.id})
+        await api.delete_tasks(args.ids)
+        output({"ok": True, "ids": args.ids})
     finally:
         await api.close()
 
@@ -520,8 +582,8 @@ async def cmd_tasks_move(args):
 async def cmd_tasks_pin(args):
     api = await get_api()
     try:
-        task = await api.pin_task(args.id, not args.unpin)
-        output(fmt_task_detail(task))
+        tasks = await api.pin_tasks(args.ids, not args.unpin)
+        output({"ok": True, "ids": args.ids, "pinned": not args.unpin})
     finally:
         await api.close()
 
@@ -615,7 +677,7 @@ async def cmd_tags_list(args):
 async def cmd_tags_add(args):
     api = await get_api()
     try:
-        tag = await api.create_tag(args.name, args.color)
+        tag = await api.create_tag(args.name, args.color, args.parent)
         output(fmt_tag(tag))
     finally:
         await api.close()
@@ -633,7 +695,7 @@ async def cmd_tags_rm(args):
 async def cmd_tags_edit(args):
     api = await get_api()
     try:
-        tag = await api.update_tag(args.name, new_name=args.rename, color=args.color)
+        tag = await api.update_tag(args.name, new_name=args.rename, color=args.color, parent=args.parent)
         output(fmt_tag(tag))
     finally:
         await api.close()
@@ -696,7 +758,7 @@ async def cmd_columns_list(args):
 async def cmd_columns_add(args):
     api = await get_api()
     try:
-        column = await api.create_column(args.project, args.name)
+        column = await api.create_column(args.project, args.name, args.sort)
         output(fmt_column(column))
     finally:
         await api.close()
@@ -705,7 +767,7 @@ async def cmd_columns_add(args):
 async def cmd_columns_edit(args):
     api = await get_api()
     try:
-        column = await api.update_column(args.id, args.project, args.name)
+        column = await api.update_column(args.id, args.project, name=args.name, sort_order=args.sort)
         output(fmt_column(column))
     finally:
         await api.close()
@@ -745,10 +807,14 @@ def build_parser():
     # tasks list
     tl = tasks_subs.add_parser("list", help="List tasks")
     tl.add_argument("--project", "-p", help="Filter by project ID")
+    tl.add_argument("--column", help="Filter by column ID (kanban)")
     tl.add_argument("--tag", "-t", help="Filter by tag")
     tl.add_argument("--priority", choices=["low", "medium", "high"], help="Filter by priority")
     tl.add_argument("--today", action="store_true", help="Due today only")
     tl.add_argument("--overdue", action="store_true", help="Overdue only")
+    tl.add_argument("--from-date", help="From date (YYYY-MM-DD)")
+    tl.add_argument("--to-date", help="To date (YYYY-MM-DD)")
+    tl.add_argument("--days", type=int, help="Lookback days")
     tl.add_argument("--limit", "-n", type=int, help="Max results")
     tl.set_defaults(func=cmd_tasks_list)
 
@@ -778,13 +844,13 @@ def build_parser():
     te.set_defaults(func=cmd_tasks_edit)
 
     # tasks done
-    td = tasks_subs.add_parser("done", help="Complete task")
-    td.add_argument("id", help="Task ID")
+    td = tasks_subs.add_parser("done", help="Complete task(s)")
+    td.add_argument("ids", nargs="+", help="Task ID(s)")
     td.set_defaults(func=cmd_tasks_done)
 
     # tasks rm
-    tr = tasks_subs.add_parser("rm", help="Delete task")
-    tr.add_argument("id", help="Task ID")
+    tr = tasks_subs.add_parser("rm", help="Delete task(s)")
+    tr.add_argument("ids", nargs="+", help="Task ID(s)")
     tr.set_defaults(func=cmd_tasks_rm)
 
     # tasks move
@@ -794,8 +860,8 @@ def build_parser():
     tm.set_defaults(func=cmd_tasks_move)
 
     # tasks pin
-    tp = tasks_subs.add_parser("pin", help="Pin/unpin task")
-    tp.add_argument("id", help="Task ID")
+    tp = tasks_subs.add_parser("pin", help="Pin/unpin task(s)")
+    tp.add_argument("ids", nargs="+", help="Task ID(s)")
     tp.add_argument("--unpin", action="store_true", help="Unpin instead of pin")
     tp.set_defaults(func=cmd_tasks_pin)
 
@@ -850,7 +916,8 @@ def build_parser():
 
     tga = tags_subs.add_parser("add", help="Create tag")
     tga.add_argument("name", help="Tag name")
-    tga.add_argument("--color", help="Tag color")
+    tga.add_argument("--color", help="Tag color (hex)")
+    tga.add_argument("--parent", help="Parent tag name")
     tga.set_defaults(func=cmd_tags_add)
 
     tgr = tags_subs.add_parser("rm", help="Delete tag")
@@ -860,7 +927,8 @@ def build_parser():
     tge = tags_subs.add_parser("edit", help="Update tag")
     tge.add_argument("name", help="Tag name")
     tge.add_argument("--rename", help="New name")
-    tge.add_argument("--color", help="New color")
+    tge.add_argument("--color", help="New color (hex)")
+    tge.add_argument("--parent", help="New parent tag (empty to remove)")
     tge.set_defaults(func=cmd_tags_edit)
 
     tgm = tags_subs.add_parser("merge", help="Merge tags")
@@ -899,12 +967,14 @@ def build_parser():
     ca = col_subs.add_parser("add", help="Create column")
     ca.add_argument("name", help="Column name")
     ca.add_argument("--project", "-p", required=True, help="Project ID")
+    ca.add_argument("--sort", type=int, help="Sort order")
     ca.set_defaults(func=cmd_columns_add)
 
-    ce = col_subs.add_parser("edit", help="Rename column")
+    ce = col_subs.add_parser("edit", help="Update column")
     ce.add_argument("id", help="Column ID")
     ce.add_argument("--project", "-p", required=True, help="Project ID")
-    ce.add_argument("--name", required=True, help="New name")
+    ce.add_argument("--name", help="New name")
+    ce.add_argument("--sort", type=int, help="New sort order")
     ce.set_defaults(func=cmd_columns_edit)
 
     cr = col_subs.add_parser("rm", help="Delete column")
