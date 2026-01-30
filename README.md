@@ -53,6 +53,29 @@ All mutation operations support **batch processing** (1-100 items per call).
 
 ---
 
+## CLI for AI Skills
+
+In addition to the MCP server, this package includes a lightweight CLI (`ticktick`) optimized for AI agent skills:
+
+```bash
+ticktick tasks list --today
+ticktick tasks add "Buy groceries" --due tomorrow --priority high
+ticktick tasks done TASK_ID
+ticktick tasks abandon TASK_ID   # Mark as "won't do"
+ticktick projects list
+ticktick auth login              # Headless OAuth2 flow
+```
+
+**Features:**
+- All output is JSON for easy parsing
+- Natural language dates: `today`, `tomorrow`, `in 3 days`, `next monday`
+- Batch operations: pass multiple IDs to `done`, `abandon`, `rm`, etc.
+- Timezone-aware: set `TZ` environment variable for correct date handling
+
+Run `ticktick --help` for full command reference.
+
+---
+
 ## Installation
 
 ### Claude.ai (Remote MCP via Railway)
