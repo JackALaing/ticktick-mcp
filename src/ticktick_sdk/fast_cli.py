@@ -325,6 +325,24 @@ class CachedAPI:
             })
         await self._v2.batch_tasks(update=updates)
 
+    async def abandon_task(self, task_id: str):
+        await self.abandon_tasks([task_id])
+
+    async def abandon_tasks(self, task_ids: list[str]):
+        from datetime import datetime
+        from ticktick_sdk.constants import TaskStatus
+        from ticktick_sdk.models import Task
+        updates = []
+        for task_id in task_ids:
+            task = await self.get_task(task_id)
+            updates.append({
+                "id": task_id,
+                "projectId": task.project_id,
+                "status": TaskStatus.ABANDONED,
+                "completedTime": Task.format_datetime(datetime.now(), "v2"),
+            })
+        await self._v2.batch_tasks(update=updates)
+
     async def delete_task(self, task_id: str):
         await self.delete_tasks([task_id])
 
@@ -641,6 +659,15 @@ async def cmd_tasks_done(args):
         await api.close()
 
 
+async def cmd_tasks_abandon(args):
+    api = await get_api()
+    try:
+        await api.abandon_tasks(args.ids)
+        output({"ok": True, "ids": args.ids})
+    finally:
+        await api.close()
+
+
 async def cmd_tasks_rm(args):
     api = await get_api()
     try:
@@ -927,6 +954,11 @@ def build_parser():
     td = tasks_subs.add_parser("done", help="Complete task(s)")
     td.add_argument("ids", nargs="+", help="Task ID(s)")
     td.set_defaults(func=cmd_tasks_done)
+
+    # tasks abandon
+    tab = tasks_subs.add_parser("abandon", help="Abandon task(s) (mark as won't do)")
+    tab.add_argument("ids", nargs="+", help="Task ID(s)")
+    tab.set_defaults(func=cmd_tasks_abandon)
 
     # tasks rm
     tr = tasks_subs.add_parser("rm", help="Delete task(s)")
