@@ -28,7 +28,7 @@ AUTH_CACHE_FILE = AUTH_CACHE_DIR / "auth_cache.json"
 SESSION_TTL = 86400
 
 
-def parse_natural_date(date_str: str) -> str:
+def parse_natural_date(date_str: str, timezone: str = "America/New_York") -> str:
     """
     Parse natural language dates into YYYY-MM-DD format.
 
@@ -38,14 +38,28 @@ def parse_natural_date(date_str: str) -> str:
         - next monday/tuesday/etc.
         - YYYY-MM-DD (passthrough)
 
+    Args:
+        date_str: The date string to parse
+        timezone: IANA timezone name (default: America/New_York)
+
     Returns:
         Date string in YYYY-MM-DD format
     """
     from datetime import datetime, timedelta
     import re
+    import os
 
     date_str = date_str.strip().lower()
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Get current time in user's timezone
+    tz = os.environ.get("TZ", timezone)
+    try:
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo(tz))
+    except (ImportError, KeyError):
+        # Fallback to UTC if zoneinfo unavailable or invalid tz
+        now = datetime.now()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Already in YYYY-MM-DD format
     if re.match(r'^\d{4}-\d{2}-\d{2}', date_str):
