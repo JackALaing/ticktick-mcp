@@ -230,12 +230,18 @@ class CachedAPI:
         return Task.from_v2(data)
 
     async def create_task(self, title: str, project_id: str = None, **kwargs):
+        results = await self.create_tasks([title], project_id=project_id, **kwargs)
+        return results[0] if results else None
+
+    async def create_tasks(self, titles: list[str], project_id: str = None, **kwargs):
         pid = project_id or self._inbox_id
-        response = await self._v2.create_task(title=title, project_id=pid, **kwargs)
-        task_id = next(iter(response.get("id2etag", {}).keys()), None)
-        if task_id:
-            return await self.get_task(task_id)
-        raise ValueError("Failed to create task")
+        results = []
+        for title in titles:
+            response = await self._v2.create_task(title=title, project_id=pid, **kwargs)
+            task_id = next(iter(response.get("id2etag", {}).keys()), None)
+            if task_id:
+                results.append(await self.get_task(task_id))
+        return results
 
     async def update_task(self, task_id: str, **kwargs):
         task = await self.get_task(task_id)
@@ -270,8 +276,12 @@ class CachedAPI:
             await self._v2.delete_task(task.project_id, task_id)
 
     async def move_task(self, task_id: str, to_project_id: str):
-        task = await self.get_task(task_id)
-        await self._v2.move_task(task_id, task.project_id, to_project_id)
+        await self.move_tasks([task_id], to_project_id)
+
+    async def move_tasks(self, task_ids: list[str], to_project_id: str):
+        for task_id in task_ids:
+            task = await self.get_task(task_id)
+            await self._v2.move_task(task_id, task.project_id, to_project_id)
 
     async def pin_task(self, task_id: str, pin: bool = True):
         result = await self.pin_tasks([task_id], pin)
@@ -297,15 +307,23 @@ class CachedAPI:
         return [t for t in tasks if q in (t.title or "").lower() or q in (t.content or "").lower()]
 
     async def set_task_parent(self, task_id: str, parent_id: str):
-        task = await self.get_task(task_id)
-        await self._v2.set_task_parent(task_id, task.project_id, parent_id)
+        await self.set_task_parents([(task_id, parent_id)])
+
+    async def set_task_parents(self, task_parent_pairs: list[tuple[str, str]]):
+        for task_id, parent_id in task_parent_pairs:
+            task = await self.get_task(task_id)
+            await self._v2.set_task_parent(task_id, task.project_id, parent_id)
 
     async def unset_task_parent(self, task_id: str):
-        task = await self.get_task(task_id)
-        parent_id = task.parent_id
-        if not parent_id:
-            raise ValueError(f"Task {task_id} has no parent")
-        await self._v2.unset_task_parent(task_id, task.project_id, parent_id)
+        await self.unset_task_parents([task_id])
+
+    async def unset_task_parents(self, task_ids: list[str]):
+        for task_id in task_ids:
+            task = await self.get_task(task_id)
+            parent_id = task.parent_id
+            if not parent_id:
+                raise ValueError(f"Task {task_id} has no parent")
+            await self._v2.unset_task_parent(task_id, task.project_id, parent_id)
 
     async def list_tags(self):
         from ticktick_sdk.models import Tag
@@ -518,15 +536,18 @@ async def cmd_tasks_add(args):
         priority_map = {"low": 1, "medium": 3, "high": 5}
         priority = priority_map.get(args.priority) if args.priority else None
         tags = args.tags.split(",") if args.tags else None
-        task = await api.create_task(
-            title=args.title,
+        tasks = await api.create_tasks(
+            titles=args.titles,
             project_id=args.project,
             content=args.content,
             priority=priority,
             due_date=args.due,
             tags=tags,
         )
-        output(fmt_task_detail(task))
+        if len(tasks) == 1:
+            output(fmt_task_detail(tasks[0]))
+        else:
+            output([fmt_task_list(t) for t in tasks])
     finally:
         await api.close()
 
@@ -573,8 +594,8 @@ async def cmd_tasks_rm(args):
 async def cmd_tasks_move(args):
     api = await get_api()
     try:
-        await api.move_task(args.id, args.to)
-        output({"ok": True, "id": args.id, "to": args.to})
+        await api.move_tasks(args.ids, args.to)
+        output({"ok": True, "ids": args.ids, "to": args.to})
     finally:
         await api.close()
 
@@ -600,8 +621,8 @@ async def cmd_tasks_search(args):
 async def cmd_tasks_parent(args):
     api = await get_api()
     try:
-        await api.set_task_parent(args.id, args.parent)
-        output({"ok": True, "id": args.id, "parent": args.parent})
+        await api.set_task_parents([(tid, args.parent) for tid in args.ids])
+        output({"ok": True, "ids": args.ids, "parent": args.parent})
     finally:
         await api.close()
 
@@ -609,8 +630,8 @@ async def cmd_tasks_parent(args):
 async def cmd_tasks_unparent(args):
     api = await get_api()
     try:
-        await api.unset_task_parent(args.id)
-        output({"ok": True, "id": args.id})
+        await api.unset_task_parents(args.ids)
+        output({"ok": True, "ids": args.ids})
     finally:
         await api.close()
 
@@ -824,10 +845,10 @@ def build_parser():
     tg.set_defaults(func=cmd_tasks_get)
 
     # tasks add
-    ta = tasks_subs.add_parser("add", help="Create task")
-    ta.add_argument("title", help="Task title")
+    ta = tasks_subs.add_parser("add", help="Create task(s)")
+    ta.add_argument("titles", nargs="+", help="Task title(s)")
     ta.add_argument("--project", "-p", help="Project ID")
-    ta.add_argument("--content", "-c", help="Description")
+    ta.add_argument("--content", "-c", help="Description (for single task)")
     ta.add_argument("--due", "-d", help="Due date (YYYY-MM-DD)")
     ta.add_argument("--priority", choices=["low", "medium", "high"])
     ta.add_argument("--tags", help="Comma-separated tags")
@@ -854,8 +875,8 @@ def build_parser():
     tr.set_defaults(func=cmd_tasks_rm)
 
     # tasks move
-    tm = tasks_subs.add_parser("move", help="Move task to project")
-    tm.add_argument("id", help="Task ID")
+    tm = tasks_subs.add_parser("move", help="Move task(s) to project")
+    tm.add_argument("ids", nargs="+", help="Task ID(s)")
     tm.add_argument("--to", required=True, help="Target project ID")
     tm.set_defaults(func=cmd_tasks_move)
 
@@ -871,14 +892,14 @@ def build_parser():
     ts.set_defaults(func=cmd_tasks_search)
 
     # tasks parent
-    tpa = tasks_subs.add_parser("parent", help="Set task parent")
-    tpa.add_argument("id", help="Task ID")
+    tpa = tasks_subs.add_parser("parent", help="Set task(s) parent")
+    tpa.add_argument("ids", nargs="+", help="Task ID(s)")
     tpa.add_argument("--parent", required=True, help="Parent task ID")
     tpa.set_defaults(func=cmd_tasks_parent)
 
     # tasks unparent
-    tup = tasks_subs.add_parser("unparent", help="Remove task parent")
-    tup.add_argument("id", help="Task ID")
+    tup = tasks_subs.add_parser("unparent", help="Remove task(s) parent")
+    tup.add_argument("ids", nargs="+", help="Task ID(s)")
     tup.set_defaults(func=cmd_tasks_unparent)
 
     # projects
