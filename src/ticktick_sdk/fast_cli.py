@@ -903,6 +903,14 @@ def cmd_auth_clear(args):
     output({"ok": True})
 
 
+def cmd_auth_login(args):
+    """Run OAuth2 flow in manual/headless mode."""
+    from ticktick_sdk.auth_cli import main as auth_main
+    # Always use manual mode for headless/AI-friendly operation
+    exit_code = auth_main(manual=True)
+    sys.exit(exit_code)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(prog="ticktick", description="TickTick CLI")
     subs = parser.add_subparsers(dest="command", required=True)
@@ -1100,6 +1108,7 @@ def build_parser():
 
     auth_subs.add_parser("status", help="Check auth status").set_defaults(func=cmd_auth_status)
     auth_subs.add_parser("clear", help="Clear cached auth").set_defaults(func=cmd_auth_clear)
+    auth_subs.add_parser("login", help="Run OAuth2 login (headless/manual mode)").set_defaults(func=cmd_auth_login)
 
     return parser
 
