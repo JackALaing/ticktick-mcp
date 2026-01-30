@@ -28,6 +28,64 @@ AUTH_CACHE_FILE = AUTH_CACHE_DIR / "auth_cache.json"
 SESSION_TTL = 86400
 
 
+def parse_natural_date(date_str: str) -> str:
+    """
+    Parse natural language dates into YYYY-MM-DD format.
+
+    Supports:
+        - today, tomorrow, yesterday
+        - in N days/weeks (e.g., "in 3 days", "in 2 weeks")
+        - next monday/tuesday/etc.
+        - YYYY-MM-DD (passthrough)
+
+    Returns:
+        Date string in YYYY-MM-DD format
+    """
+    from datetime import datetime, timedelta
+    import re
+
+    date_str = date_str.strip().lower()
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Already in YYYY-MM-DD format
+    if re.match(r'^\d{4}-\d{2}-\d{2}', date_str):
+        return date_str[:10]
+
+    # Simple keywords
+    if date_str == "today":
+        return today.strftime("%Y-%m-%d")
+    if date_str == "tomorrow":
+        return (today + timedelta(days=1)).strftime("%Y-%m-%d")
+    if date_str == "yesterday":
+        return (today - timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # "in N days/weeks"
+    match = re.match(r'^in\s+(\d+)\s+(day|days|week|weeks)$', date_str)
+    if match:
+        n = int(match.group(1))
+        unit = match.group(2)
+        if unit.startswith("week"):
+            n *= 7
+        return (today + timedelta(days=n)).strftime("%Y-%m-%d")
+
+    # "next monday", "next tuesday", etc.
+    weekdays = {
+        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+        "friday": 4, "saturday": 5, "sunday": 6
+    }
+    match = re.match(r'^next\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$', date_str)
+    if match:
+        target_weekday = weekdays[match.group(1)]
+        current_weekday = today.weekday()
+        days_ahead = target_weekday - current_weekday
+        if days_ahead <= 0:  # Target day is today or earlier, go to next week
+            days_ahead += 7
+        return (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+    # If nothing matched, return as-is (let the API handle/reject it)
+    return date_str
+
+
 def load_dotenv_if_available() -> None:
     try:
         from dotenv import load_dotenv
@@ -536,12 +594,13 @@ async def cmd_tasks_add(args):
         priority_map = {"low": 1, "medium": 3, "high": 5}
         priority = priority_map.get(args.priority) if args.priority else None
         tags = args.tags.split(",") if args.tags else None
+        due = parse_natural_date(args.due) if args.due else None
         tasks = await api.create_tasks(
             titles=args.titles,
             project_id=args.project,
             content=args.content,
             priority=priority,
-            due_date=args.due,
+            due_date=due,
             tags=tags,
         )
         if len(tasks) == 1:
@@ -564,7 +623,7 @@ async def cmd_tasks_edit(args):
         if args.priority:
             kwargs["priority"] = priority_map.get(args.priority)
         if args.due:
-            kwargs["dueDate"] = args.due
+            kwargs["dueDate"] = parse_natural_date(args.due)
         if args.tags:
             kwargs["tags"] = args.tags.split(",")
         task = await api.update_task(args.id, **kwargs)
@@ -849,7 +908,7 @@ def build_parser():
     ta.add_argument("titles", nargs="+", help="Task title(s)")
     ta.add_argument("--project", "-p", help="Project ID")
     ta.add_argument("--content", "-c", help="Description (for single task)")
-    ta.add_argument("--due", "-d", help="Due date (YYYY-MM-DD)")
+    ta.add_argument("--due", "-d", help="Due date (YYYY-MM-DD, today, tomorrow, 'in N days', 'next monday')")
     ta.add_argument("--priority", choices=["low", "medium", "high"])
     ta.add_argument("--tags", help="Comma-separated tags")
     ta.set_defaults(func=cmd_tasks_add)
@@ -859,7 +918,7 @@ def build_parser():
     te.add_argument("id", help="Task ID")
     te.add_argument("--title", help="New title")
     te.add_argument("--content", "-c", help="New description")
-    te.add_argument("--due", "-d", help="New due date")
+    te.add_argument("--due", "-d", help="New due date (YYYY-MM-DD, today, tomorrow, 'in N days', 'next monday')")
     te.add_argument("--priority", choices=["low", "medium", "high"])
     te.add_argument("--tags", help="New tags (comma-separated)")
     te.set_defaults(func=cmd_tasks_edit)
